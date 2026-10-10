@@ -202,37 +202,41 @@
   .bar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;font-size:10px;color:var(--muted)}
   .bar .fill{width:100%;background:var(--accent);border-radius:3px 3px 0 0;min-height:2px}
   .st-row{font-size:13px;padding:7px 0;border-bottom:1px solid var(--line)}
+  #picker{width:100%;font-family:inherit;font-size:15px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);margin-bottom:10px}
+  #picker:disabled{opacity:.6}
+  .wrap{padding:10px 14px calc(14px + env(safe-area-inset-bottom,0px))}
+  .tabs{margin-bottom:10px}
+  .tabs button{padding:8px 2px;font-size:13px}
+  .console{padding:14px 16px}
+  .stage-name{margin-bottom:2px}
+  .timer{font-size:60px;margin:2px 0 10px}
+  .readouts{margin-bottom:10px}
+  .readout{padding:8px}
+  .readout .val{font-size:22px}
+  .next-stage{margin-bottom:10px;font-size:12px}
+  .controls button{padding:11px 16px}
+  .controls .btn-stop{background:#C62828;color:#fff}
+  .progress-track{margin-top:12px}
+  .run-bt{margin:10px 0 4px;flex-wrap:nowrap}
+  .run-bt button{white-space:nowrap}
+  #btStatus{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+  #btLive{font-size:12px;margin:0 0 4px}
+  .stage-list{margin-top:6px}
+  .stage-list summary{margin-bottom:6px}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Таймер для дорожки</h1>
   <div class="tabs" id="tabs">
     <button data-v="Run" class="on">Тренировка</button>
+    <button data-v="Bt">Дорожка</button>
     <button data-v="Edit">Редактор</button>
     <button data-v="Stats">Статистика</button>
   </div>
   <div id="viewRun">
-  <div class="picker" id="picker"></div>
+  <select id="picker"></select>
 
-  <div class="bt">
-    <div class="bt-row">
-      <button id="btConnect">Подключить дорожку</button>
-      <span id="btStatus">не подключена (таймер работает и так)</span>
-    </div>
-    <div class="bt-live" id="btLive"></div>
-    <div class="bt-row" id="btManual" hidden>
-      <button data-act="start">СТАРТ ленты</button>
-      <button data-act="s-">скор −0,5</button>
-      <button data-act="s+">скор +0,5</button>
-      <button data-act="i-">накл −1</button>
-      <button data-act="i+">накл +1</button>
-      <button class="stop" data-act="stop">СТОП ленты</button>
-      <button data-act="copy">Скопировать лог</button>
-    </div>
-    <div class="bt-warn">Перед подключением закрой FitShow. Встань на боковые платформы, ключ безопасности пристегни, начинай с малой скорости.</div>
-    <pre class="bt-log" id="btLog"></pre>
-  </div>
+  
 
   <div class="console">
     <div class="stage-name" id="stageName">Выбери тренировку и жми старт</div>
@@ -251,16 +255,37 @@
     <div class="controls">
       <button class="btn-secondary" id="resetBtn">Сброс</button>
       <button class="btn-primary" id="startBtn">Старт</button>
+      <button class="btn-stop" id="stopBtn" hidden>СТОП</button>
     </div>
     <div class="progress-track" id="progressTrack"></div>
   </div>
 
+  <div class="bt-row bt run-bt"><button id="btConnect">Подключить дорожку</button><span id="btStatus">не подключена</span></div>
+  <div class="bt-live" id="btLive"></div>
+
   <details class="stage-list">
-    <summary>Все этапы тренировки</summary>
+    <summary>Этапы</summary>
     <table id="stageTable"></table>
   </details>
 
-  <div class="hint" id="hint">Таймер попробует не давать экрану засыпать. Если не получится — держи экран включённым вручную, в фоне отсчёт не идёт.</div>
+  </div>
+
+  <div id="viewBt" hidden>
+    <div class="bt">
+      <div class="hint">Подключение: кнопка «Подключить дорожку» на вкладке «Тренировка». Здесь ручное управление лентой и журнал команд.</div>
+      <div class="bt-warn">Перед подключением закрой FitShow. Встань на боковые платформы, пристегни ключ безопасности, начинай с малой скорости.</div>
+      <div class="bt-row" id="btManual" hidden style="margin-top:10px">
+        <button data-act="start">СТАРТ ленты</button>
+        <button data-act="s-">скор −0,5</button>
+        <button data-act="s+">скор +0,5</button>
+        <button data-act="i-">накл −1</button>
+        <button data-act="i+">накл +1</button>
+        <button class="stop" data-act="stop">СТОП ленты</button>
+        <button data-act="copy">Скопировать лог</button>
+      </div>
+      <pre class="bt-log" id="btLog"></pre>
+      <div class="hint" id="hint">Таймер попробует не давать экрану засыпать. Если не получится, держи экран включённым вручную: в фоне отсчёт не идёт.</div>
+    </div>
   </div>
 
   <div id="viewEdit" hidden>
@@ -393,15 +418,13 @@ function renderPicker(){
   picker.innerHTML = '';
   workouts.forEach((w, i) => {
     w.id = i;
-    const btn = document.createElement('button');
-    const t = document.createElement('span'); t.className = 't'; t.textContent = w.title;
-    const d = document.createElement('span'); d.className = 'd'; d.textContent = fm(totalMin(w)) + ' мин';
-    btn.append(t, d);
-    btn.addEventListener('click', () => selectWorkout(w.id));
-    picker.appendChild(btn);
+    const o = document.createElement('option');
+    o.value = i; o.textContent = w.title + ' · ' + fm(totalMin(w)) + ' мин';
+    picker.appendChild(o);
   });
-  if (current) [...picker.children].forEach((b, i) => b.classList.toggle('active', i === current.id));
+  if (current) picker.value = current.id;
 }
+picker.addEventListener('change', () => selectWorkout(+picker.value));
 renderPicker();
 
 function fmt(min) {
@@ -431,7 +454,7 @@ function selectWorkout(id) {
   current = workouts[id];
   stageIdx = 0;
   secondsLeft = current.stages[0][1] * 60;
-  [...picker.children].forEach((b, i) => b.classList.toggle('active', i === id));
+  picker.value = id;
   renderStageTable();
   renderProgress();
   render();
@@ -496,7 +519,7 @@ function tick() {
 function play() {
   if (!current) { selectWorkout(0); }
   running = true;
-  startBtn.textContent = 'Пауза';
+  startBtn.textContent = 'Пауза'; picker.disabled = true;
   tickHandle = setInterval(tick, 1000);
   requestWakeLock();
   applyStage(true);
@@ -504,7 +527,7 @@ function play() {
 
 function pause() {
   running = false;
-  startBtn.textContent = 'Старт';
+  startBtn.textContent = 'Старт'; picker.disabled = false;
   clearInterval(tickHandle);
   releaseWakeLock();
 }
@@ -622,7 +645,7 @@ async function connectBT(){
     btStatus.textContent = 'поиск…';
     btDevice = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [0x1826, 0xfff0] });
     btDevice.addEventListener('gattserverdisconnected', () => {
-      cp = null; btManual.hidden = true;
+      cp = null; btManual.hidden = true; $('stopBtn').hidden = true;
       btStatus.textContent = 'связь потеряна — лента работает, управляй с пульта';
       blog('отключено');
     });
@@ -646,7 +669,7 @@ async function connectBT(){
     } catch (e) {}
     cp = ctl;
     btStatus.textContent = 'подключена: ' + (btDevice.name || 'дорожка');
-    btManual.hidden = false;
+    btManual.hidden = false; $('stopBtn').hidden = false;
     sendCP([0x00], 'запрос управления');
   } catch (e) { btStatus.textContent = 'не удалось: ' + e.message; blog('ошибка: ' + e.message); }
 }
@@ -673,7 +696,7 @@ btManual.addEventListener('click', e => {
 
 /* ===== Вкладки, редактор тренировок, статистика ===== */
 function showView(v){
-  ['Run', 'Edit', 'Stats'].forEach(n => { $('view' + n).hidden = n !== v; });
+  ['Run', 'Bt', 'Edit', 'Stats'].forEach(n => { $('view' + n).hidden = n !== v; });
   [...$('tabs').children].forEach(b => b.classList.toggle('on', b.dataset.v === v));
   if (v === 'Edit') renderEditor();
   if (v === 'Stats') renderStats();
@@ -775,6 +798,7 @@ function renderStats(){
 $('stClear').addEventListener('click', e => armed(e.target, 'Точно очистить?', () => { saveJSON('tt_history', []); renderStats(); }));
 window.addEventListener('pagehide', () => saveSession(false));
 renderStats();
+$('stopBtn').addEventListener('click', () => { pause(); btStop(); });
 </script>
 <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');</script>
 </body>
