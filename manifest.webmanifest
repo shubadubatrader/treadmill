@@ -1,12 +1,12 @@
 {
- "name": "Таймер для дорожки",
+ "name": "Дорожка",
  "short_name": "Дорожка",
  "lang": "ru",
  "start_url": "./index.html",
  "scope": "./",
  "display": "standalone",
- "background_color": "#121214",
- "theme_color": "#121214",
+ "background_color": "#F8F6F3",
+ "theme_color": "#F8F6F3",
  "icons": [
   {
    "src": "icon-192.png",
