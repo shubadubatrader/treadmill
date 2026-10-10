@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#121214">
+<link rel="icon" href="icon-192.png">
+<title>Таймер для дорожки</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F5F4F0;
+    --surface: #FFFFFF;
+    --ink: #16181D;
+    --muted: #6B6F76;
+    --line: #E4E2DB;
+    --accent: #FF5A1F;
+    --accent-ink: #FFFFFF;
+    color-scheme: light dark;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    box-sizing: border-box;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121214;
+      --surface: #1C1C1F;
+      --ink: #F2F1ED;
+      --muted: #9A9DA6;
+      --line: #2A2A2E;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #121214;
+    --surface: #1C1C1F;
+    --ink: #F2F1ED;
+    --muted: #9A9DA6;
+    --line: #2A2A2E;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  html, body {
+    height: 100%;
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  .wrap {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 24px 20px calc(32px + env(safe-area-inset-bottom, 0px));
+  }
+  h1 {
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--muted);
+    margin: 0 0 16px;
+    letter-spacing: 0.01em;
+  }
+  .picker {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  .picker button {
+    font-family: inherit;
+    font-size: 13px;
+    padding: 10px 8px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    cursor: pointer;
+    text-align: left;
+    line-height: 1.3;
+  }
+  .picker button .t { display: block; font-weight: 500; }
+  .picker button .d { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .picker button.active {
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+  .console {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 28px 24px;
+    text-align: center;
+  }
+  .stage-name {
+    font-size: 14px;
+    color: var(--muted);
+    margin-bottom: 6px;
+    min-height: 18px;
+  }
+  .timer {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 64px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.01em;
+    margin: 8px 0 20px;
+    font-variant-numeric: tabular-nums;
+  }
+  .readouts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .readout {
+    background: var(--bg);
+    border-radius: 12px;
+    padding: 12px 8px;
+  }
+  .readout .label {
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .readout .val {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 24px;
+    font-weight: 700;
+    margin-top: 2px;
+  }
+  .readout.live .val { color: var(--accent); }
+  .next-stage {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 20px;
+  }
+  .controls {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+  }
+  .controls button {
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 500;
+    padding: 12px 20px;
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+  }
+  .btn-primary { background: var(--accent); color: var(--accent-ink); flex: 1; }
+  .btn-secondary { background: var(--bg); color: var(--ink); border: 1px solid var(--line) !important; }
+  .progress-track {
+    display: flex;
+    gap: 3px;
+    margin-top: 20px;
+  }
+  .progress-seg {
+    height: 5px;
+    border-radius: 3px;
+    background: var(--line);
+    flex-grow: 1;
+  }
+  .progress-seg.done { background: var(--muted); }
+  .progress-seg.active { background: var(--accent); }
+  .stage-list {
+    margin-top: 24px;
+  }
+  .stage-list summary {
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  td { padding: 7px 4px; border-bottom: 1px solid var(--line); }
+  td.num { font-family: 'JetBrains Mono', ui-monospace, monospace; text-align: right; color: var(--muted); white-space: nowrap; }
+  tr.row-active td { color: var(--accent); font-weight: 500; }
+  .hint {
+    font-size: 12px;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 16px;
+  }
+  .bt{margin-bottom:16px;font-size:13px}
+  .bt-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+  .bt-row[hidden]{display:none}
+  .bt button{font-family:inherit;font-size:13px;padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+  .bt button.stop{background:#C62828;color:#fff;border-color:#C62828}
+  .bt-live{font-family:'JetBrains Mono',ui-monospace,monospace;color:var(--accent);margin-bottom:8px;min-height:1em}
+  .bt-log{max-height:170px;overflow:auto;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--muted);white-space:pre-wrap;margin:6px 0 0}
+  .bt-warn{color:var(--muted);font-size:12px;margin:6px 0 0}
+  .tabs{display:flex;gap:6px;margin-bottom:16px}
+  .tabs button{flex:1;font-family:inherit;font-size:14px;padding:9px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+  .tabs button.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+  #viewEdit input,#viewEdit select{font-family:inherit;font-size:14px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);min-width:0}
+  #viewEdit button,#viewStats button{font-family:inherit;font-size:13px;padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+  #edName{width:100%;margin:10px 0}
+  .ed-row{display:grid;grid-template-columns:1fr 54px 54px 48px 32px;gap:4px;margin-bottom:6px;align-items:center}
+  .ed-row.hd{font-size:11px;color:var(--muted)}
+  .bars{display:flex;gap:4px;align-items:flex-end;height:120px;margin:16px 0}
+  .bar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;font-size:10px;color:var(--muted)}
+  .bar .fill{width:100%;background:var(--accent);border-radius:3px 3px 0 0;min-height:2px}
+  .st-row{font-size:13px;padding:7px 0;border-bottom:1px solid var(--line)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Таймер для дорожки</h1>
+  <div class="tabs" id="tabs">
+    <button data-v="Run" class="on">Тренировка</button>
+    <button data-v="Edit">Редактор</button>
+    <button data-v="Stats">Статистика</button>
+  </div>
+  <div id="viewRun">
+  <div class="picker" id="picker"></div>
+
+  <div class="bt">
+    <div class="bt-row">
+      <button id="btConnect">Подключить дорожку</button>
+      <span id="btStatus">не подключена (таймер работает и так)</span>
+    </div>
+    <div class="bt-live" id="btLive"></div>
+    <div class="bt-row" id="btManual" hidden>
+      <button data-act="start">СТАРТ ленты</button>
+      <button data-act="s-">скор −0,5</button>
+      <button data-act="s+">скор +0,5</button>
+      <button data-act="i-">накл −1</button>
+      <button data-act="i+">накл +1</button>
+      <button class="stop" data-act="stop">СТОП ленты</button>
+      <button data-act="copy">Скопировать лог</button>
+    </div>
+    <div class="bt-warn">Перед подключением закрой FitShow. Встань на боковые платформы, ключ безопасности пристегни, начинай с малой скорости.</div>
+    <pre class="bt-log" id="btLog"></pre>
+  </div>
+
+  <div class="console">
+    <div class="stage-name" id="stageName">Выбери тренировку и жми старт</div>
+    <div class="timer" id="timer">00:00</div>
+    <div class="readouts">
+      <div class="readout live">
+        <div class="label">скорость</div>
+        <div class="val" id="speedVal">—</div>
+      </div>
+      <div class="readout live">
+        <div class="label">наклон</div>
+        <div class="val" id="inclineVal">—</div>
+      </div>
+    </div>
+    <div class="next-stage" id="nextStage">&nbsp;</div>
+    <div class="controls">
+      <button class="btn-secondary" id="resetBtn">Сброс</button>
+      <button class="btn-primary" id="startBtn">Старт</button>
+    </div>
+    <div class="progress-track" id="progressTrack"></div>
+  </div>
+
+  <details class="stage-list">
+    <summary>Все этапы тренировки</summary>
+    <table id="stageTable"></table>
+  </details>
+
+  <div class="hint" id="hint">Таймер попробует не давать экрану засыпать. Если не получится — держи экран включённым вручную, в фоне отсчёт не идёт.</div>
+  </div>
+
+  <div id="viewEdit" hidden>
+    <div class="bt-row"><select id="edSel"></select><button id="edNew">+ новая</button></div>
+    <input id="edName" type="text" placeholder="Название">
+    <div class="ed-row hd"><span>этап</span><span>мин</span><span>км/ч</span><span>накл.%</span><span></span></div>
+    <div id="edRows"></div>
+    <div class="bt-row"><button id="edAdd">+ этап</button><button id="edSave">Сохранить</button><button id="edDel">Удалить тренировку</button></div>
+    <div class="hint" id="edInfo"></div>
+    <div class="bt-row" style="margin-top:12px"><button id="edReset">Вернуть стандартные</button></div>
+  </div>
+
+  <div id="viewStats" hidden>
+    <div class="readouts" id="stCards" style="grid-template-columns:repeat(3,1fr)"></div>
+    <div class="bars" id="stBars"></div>
+    <div id="stList"></div>
+    <div class="bt-row" style="margin-top:12px"><button id="stClear">Очистить историю</button></div>
+  </div>
+</div>
+
+<script>
+const DEFAULT_WORKOUTS = [
+  { id: 0, title: '1. Восстановительная', dur: '40 мин', stages: [
+    ['Разминка', 5, 4.0, 0],
+    ['Основная часть', 30, 5.0, 2],
+    ['Заминка', 5, 4.0, 0],
+  ]},
+  { id: 1, title: '2. Интервалы', dur: '45 мин', stages: (() => {
+    const s = [['Разминка', 5, 5.0, 3]];
+    for (let i = 0; i < 7; i++) {
+      s.push(['Подъём', 3, 6.0, 10]);
+      s.push(['Восстановление', 2, 6.5, 5]);
+    }
+    s.push(['Заминка', 5, 4.0, 0]);
+    return s;
+  })()},
+  { id: 2, title: '3. Пирамида', dur: '48 мин', stages: [
+    ['Разминка', 6, 5.0, 3],
+    ['Ступень 1', 4, 6.0, 5],
+    ['Ступень 2', 4, 6.0, 7],
+    ['Ступень 3', 4, 6.0, 9],
+    ['Ступень 4', 4, 5.5, 11],
+    ['Ступень 5 (пик)', 4, 5.5, 12],
+    ['Ступень 6', 4, 5.5, 11],
+    ['Ступень 7', 4, 6.0, 9],
+    ['Ступень 8', 4, 6.0, 7],
+    ['Ступень 9', 4, 6.0, 5],
+    ['Заминка', 6, 4.0, 0],
+  ]},
+  { id: 3, title: '4. В гору', dur: '40 мин', stages: [
+    ['Разминка', 5, 5.0, 3],
+    ['Блок 1', 5, 6.0, 5],
+    ['Блок 2', 5, 6.0, 7],
+    ['Блок 3', 5, 6.5, 8],
+    ['Блок 4 (пик)', 5, 6.5, 10],
+    ['Блок 5 (пик)', 5, 6.0, 12],
+    ['Блок 6 (спуск)', 5, 6.0, 8],
+    ['Заминка', 5, 4.0, 0],
+  ]},
+  { id: 4, title: '5. Длинная', dur: '60 мин', stages: [
+    ['Разминка', 5, 5.0, 3],
+    ['Основная часть', 50, 6.5, 5],
+    ['Заминка', 5, 4.0, 0],
+  ]},
+  { id: 5, title: '6. Проверка', dur: '1,5 мин', stages: [
+    ['Тест 1', 0.5, 2.0, 1],
+    ['Тест 2', 0.5, 3.0, 2],
+    ['Тест 3', 0.5, 2.0, 0],
+  ]},
+];
+
+function loadJSON(k, d){ try { const v = JSON.parse(localStorage.getItem(k)); return v || d; } catch (e) { return d; } }
+function saveJSON(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+function $(id){ return document.getElementById(id); }
+function fm(x){ return String(Math.round(x * 10) / 10).replace('.', ','); }
+function totalMin(w){ return w.stages.reduce((a, s) => a + s[1], 0); }
+let workouts = loadJSON('tt_workouts', null) || JSON.parse(JSON.stringify(DEFAULT_WORKOUTS));
+let sessionSec = 0, sessionKm = 0;
+function saveSession(finished){
+  if (current && sessionSec >= 60) {
+    const h = loadJSON('tt_history', []);
+    h.push({ t: new Date().toISOString(), w: current.title, done: sessionSec, km: Math.round(sessionKm * 100) / 100, ok: !!finished });
+    saveJSON('tt_history', h.slice(-500));
+    renderStats();
+  }
+  sessionSec = 0; sessionKm = 0;
+}
+
+let current = null;
+let stageIdx = 0;
+let secondsLeft = 0;
+let running = false;
+let tickHandle = null;
+let audioCtx = null;
+let wakeLock = null;
+const hintEl = document.getElementById('hint');
+
+async function requestWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      hintEl.textContent = 'Экран не будет гаснуть, пока таймер идёт.';
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } else {
+      hintEl.textContent = 'Этот браузер не умеет держать экран включённым — следи сам, в фоне отсчёт не идёт.';
+    }
+  } catch (e) {
+    hintEl.textContent = 'Не получилось заблокировать засыпание экрана — держи его включённым вручную.';
+  }
+}
+function releaseWakeLock() {
+  if (wakeLock) { wakeLock.release(); wakeLock = null; }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && running && !wakeLock) requestWakeLock();
+});
+
+const picker = document.getElementById('picker');
+const stageNameEl = document.getElementById('stageName');
+const timerEl = document.getElementById('timer');
+const speedEl = document.getElementById('speedVal');
+const inclineEl = document.getElementById('inclineVal');
+const nextStageEl = document.getElementById('nextStage');
+const startBtn = document.getElementById('startBtn');
+const resetBtn = document.getElementById('resetBtn');
+const progressTrack = document.getElementById('progressTrack');
+const stageTable = document.getElementById('stageTable');
+
+function renderPicker(){
+  picker.innerHTML = '';
+  workouts.forEach((w, i) => {
+    w.id = i;
+    const btn = document.createElement('button');
+    const t = document.createElement('span'); t.className = 't'; t.textContent = w.title;
+    const d = document.createElement('span'); d.className = 'd'; d.textContent = fm(totalMin(w)) + ' мин';
+    btn.append(t, d);
+    btn.addEventListener('click', () => selectWorkout(w.id));
+    picker.appendChild(btn);
+  });
+  if (current) [...picker.children].forEach((b, i) => b.classList.toggle('active', i === current.id));
+}
+renderPicker();
+
+function fmt(min) {
+  const m = Math.floor(min / 60);
+  const s = min % 60;
+  return String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+}
+
+function beep(freq, len) {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.frequency.value = freq;
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + len);
+    osc.start();
+    osc.stop(audioCtx.currentTime + len);
+  } catch (e) {}
+}
+
+function selectWorkout(id) {
+  saveSession(false);
+  pause();
+  current = workouts[id];
+  stageIdx = 0;
+  secondsLeft = current.stages[0][1] * 60;
+  [...picker.children].forEach((b, i) => b.classList.toggle('active', i === id));
+  renderStageTable();
+  renderProgress();
+  render();
+}
+
+function renderStageTable() {
+  stageTable.innerHTML = '';
+  current.stages.forEach((st, i) => {
+    const tr = document.createElement('tr');
+    if (i === stageIdx) tr.className = 'row-active';
+    tr.innerHTML = `<td>${st[0]}</td><td class="num">${st[1]} мин</td><td class="num">${st[2].toFixed(1)} км/ч</td><td class="num">${st[3]}%</td>`;
+    stageTable.appendChild(tr);
+  });
+}
+
+function renderProgress() {
+  progressTrack.innerHTML = '';
+  current.stages.forEach((st, i) => {
+    const seg = document.createElement('div');
+    seg.className = 'progress-seg' + (i < stageIdx ? ' done' : i === stageIdx ? ' active' : '');
+    seg.style.flexGrow = st[1];
+    progressTrack.appendChild(seg);
+  });
+}
+
+function render() {
+  if (!current) return;
+  const st = current.stages[stageIdx];
+  stageNameEl.textContent = st[0];
+  timerEl.textContent = fmt(secondsLeft);
+  speedEl.textContent = st[2].toFixed(1);
+  inclineEl.textContent = st[3] + '%';
+  const next = current.stages[stageIdx + 1];
+  nextStageEl.textContent = next ? `Далее: ${next[0]} — ${next[2].toFixed(1)} км/ч, ${next[3]}%` : 'Это последний этап';
+}
+
+function tick() {
+  secondsLeft--;
+  sessionSec++;
+  sessionKm += ((cp && liveSpeed > 0.2) ? liveSpeed : current.stages[stageIdx][2]) / 3600;
+  if (secondsLeft <= 3 && secondsLeft > 0) beep(600, 0.08);
+  if (secondsLeft <= 0) {
+    if (stageIdx < current.stages.length - 1) {
+      stageIdx++;
+      secondsLeft = current.stages[stageIdx][1] * 60;
+      beep(880, 0.25);
+      applyStage(false);
+      renderStageTable();
+      renderProgress();
+    } else {
+      beep(880, 0.25);
+      setTimeout(() => beep(1046, 0.4), 300);
+      pause();
+      btStop();
+      saveSession(true);
+      stageNameEl.textContent = 'Тренировка завершена 🎉';
+    }
+  }
+  render();
+}
+
+function play() {
+  if (!current) { selectWorkout(0); }
+  running = true;
+  startBtn.textContent = 'Пауза';
+  tickHandle = setInterval(tick, 1000);
+  requestWakeLock();
+  applyStage(true);
+}
+
+function pause() {
+  running = false;
+  startBtn.textContent = 'Старт';
+  clearInterval(tickHandle);
+  releaseWakeLock();
+}
+
+startBtn.addEventListener('click', () => { if (running) { pause(); btPause(); } else play(); });
+resetBtn.addEventListener('click', () => { if (current) selectWorkout(current.id); btStop(); });
+
+selectWorkout(0);
+
+/* ===== Bluetooth: стандартный профиль FTMS (сервис 0x1826) ===== */
+const SAFE_MAX_SPEED = 6.5, SAFE_MAX_INCL = 12;
+const btConnect = document.getElementById('btConnect');
+const btStatus = document.getElementById('btStatus');
+const btLive = document.getElementById('btLive');
+const btManual = document.getElementById('btManual');
+const btLog = document.getElementById('btLog');
+let cp = null, btDevice = null, queue = Promise.resolve(), pending = null, ctlEpoch = 0;
+let liveSpeed = 0, liveIncl = 0, lastFlags = null, cmdSpeed = null, cmdIncl = null;
+let devMinSpeed = 1.0, devMaxSpeed = SAFE_MAX_SPEED, devMinIncl = 0, devMaxIncl = SAFE_MAX_INCL;
+const logLines = [];
+const RES = {1:'успех',2:'не поддерживается',3:'неверный параметр',4:'не удалось',5:'нет прав на управление'};
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const hex = v => Array.from(new Uint8Array(v.buffer, v.byteOffset, v.byteLength)).map(b => b.toString(16).padStart(2, '0')).join(' ');
+function blog(m){
+  logLines.push(new Date().toLocaleTimeString('ru-RU') + ' ' + m);
+  if (logLines.length > 30) logLines.shift();
+  btLog.textContent = logLines.join('\n');
+  btLog.scrollTop = btLog.scrollHeight;
+}
+
+function sendCP(bytes, label){
+  queue = queue.then(() => new Promise(async res => {
+    if (!cp) { res(); return; }
+    let done = false;
+    pending = (op, code, raw) => {
+      if (done || op !== bytes[0]) return;
+      done = true;
+      blog(label + ': ' + (RES[code] || code) + (code !== 1 ? ' [' + raw + ']' : ''));
+      res();
+    };
+    try {
+      const buf = new Uint8Array(bytes);
+      if (cp.writeValueWithResponse) await cp.writeValueWithResponse(buf); else await cp.writeValue(buf);
+    } catch (e) { done = true; blog(label + ': ошибка записи ' + e.message); res(); return; }
+    setTimeout(() => { if (!done) { done = true; blog(label + ': нет ответа'); res(); } }, 2000);
+  }));
+  return queue;
+}
+function clampSpeed(k){ return Math.min(Math.max(k, devMinSpeed), Math.min(SAFE_MAX_SPEED, devMaxSpeed)); }
+function clampIncl(p){ return Math.min(Math.max(p, Math.max(0, devMinIncl)), Math.min(SAFE_MAX_INCL, devMaxIncl)); }
+function btSpeed(kmh){
+  kmh = clampSpeed(kmh); cmdSpeed = kmh;
+  const v = Math.round(kmh * 100);
+  return sendCP([0x02, v & 255, (v >> 8) & 255], 'скорость ' + kmh.toFixed(1));
+}
+function btIncl(pc){
+  pc = Math.round(clampIncl(pc) * 10) / 10; cmdIncl = pc;
+  const v = Math.round(pc * 10);
+  return sendCP([0x03, v & 255, (v >> 8) & 255], 'наклон ' + pc + '%');
+}
+async function btStart(){
+  if (!cp) return;
+  ctlEpoch++; cmdSpeed = null; cmdIncl = null;
+  await sendCP([0x00], 'запрос управления');
+  await sendCP([0x07], 'старт');
+}
+function btPause(){ if (cp) { ctlEpoch++; return sendCP([0x08, 0x02], 'пауза'); } }
+async function btStop(){
+  if (!cp) return;
+  const my = ++ctlEpoch; cmdSpeed = null; cmdIncl = null;
+  await sendCP([0x08, 0x01], 'стоп');
+  await wait(10000);
+  if (my !== ctlEpoch) return;
+  if (liveSpeed > 0.2) {
+    blog('лента ещё идёт — пробую паузу');
+    await sendCP([0x08, 0x02], 'пауза');
+    await wait(8000);
+    if (my !== ctlEpoch) return;
+    if (liveSpeed > 0.2) {
+      btStatus.textContent = '⚠ лента не остановилась — жми СТОП на пульте';
+      blog('ЛЕНТА НЕ ОСТАНОВИЛАСЬ — стоп пультом или ключом');
+    }
+  }
+}
+function applyStage(start){
+  if (!cp || !current) return;
+  const st = current.stages[stageIdx];
+  (async () => {
+    if (start) await btStart();
+    await btSpeed(st[2]);
+    await btIncl(st[3]);
+  })();
+}
+function onCP(e){
+  const v = e.target.value;
+  if (v.byteLength >= 3 && v.getUint8(0) === 0x80 && pending) pending(v.getUint8(1), v.getUint8(2), hex(v));
+}
+function onData(e){
+  try {
+    const d = e.target.value; const f = d.getUint16(0, true); let o = 2;
+    if (f !== lastFlags) { lastFlags = f; blog('данные: флаги 0x' + f.toString(16) + ' [' + hex(d) + ']'); }
+    let sp = null, inc = null, dist = null;
+    if (!(f & 1)) { sp = d.getUint16(o, true) / 100; o += 2; }
+    if (f & 2) o += 2;
+    if (f & 4) { dist = d.getUint8(o) | (d.getUint8(o + 1) << 8) | (d.getUint8(o + 2) << 16); o += 3; }
+    if (f & 8) { inc = d.getInt16(o, true) / 10; o += 4; }
+    if (sp !== null) liveSpeed = sp;
+    if (inc !== null) liveIncl = inc;
+    btLive.textContent = 'лента: ' + (sp !== null ? sp.toFixed(1) + ' км/ч' : '—') + ', наклон ' + (inc !== null ? inc + '%' : '—') + (dist !== null ? ', ' + dist + ' м' : '');
+  } catch (err) {}
+}
+async function connectBT(){
+  if (!navigator.bluetooth) { btStatus.textContent = 'Web Bluetooth недоступен (нужен Chrome на Android)'; return; }
+  try {
+    btStatus.textContent = 'поиск…';
+    btDevice = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [0x1826, 0xfff0] });
+    btDevice.addEventListener('gattserverdisconnected', () => {
+      cp = null; btManual.hidden = true;
+      btStatus.textContent = 'связь потеряна — лента работает, управляй с пульта';
+      blog('отключено');
+    });
+    const srv = await btDevice.gatt.connect();
+    const svc = await srv.getPrimaryService(0x1826);
+    const ctl = await svc.getCharacteristic(0x2AD9);
+    await ctl.startNotifications(); ctl.addEventListener('characteristicvaluechanged', onCP);
+    const td = await svc.getCharacteristic(0x2ACD);
+    await td.startNotifications(); td.addEventListener('characteristicvaluechanged', onData);
+    try {
+      const r = await (await svc.getCharacteristic(0x2AD4)).readValue();
+      devMinSpeed = Math.max(r.getUint16(0, true) / 100, 0.5);
+      const mx = r.getUint16(2, true) / 100; if (mx >= 1) devMaxSpeed = mx;
+      blog('скорость ' + devMinSpeed + '–' + devMaxSpeed + ' км/ч');
+    } catch (e) {}
+    try {
+      const r = await (await svc.getCharacteristic(0x2AD5)).readValue();
+      devMinIncl = r.getInt16(0, true) / 10;
+      const mx = r.getInt16(2, true) / 10; if (mx > 0) devMaxIncl = mx;
+      blog('наклон ' + devMinIncl + '–' + devMaxIncl + '%');
+    } catch (e) {}
+    cp = ctl;
+    btStatus.textContent = 'подключена: ' + (btDevice.name || 'дорожка');
+    btManual.hidden = false;
+    sendCP([0x00], 'запрос управления');
+  } catch (e) { btStatus.textContent = 'не удалось: ' + e.message; blog('ошибка: ' + e.message); }
+}
+btConnect.addEventListener('click', connectBT);
+btManual.addEventListener('click', e => {
+  const a = e.target.dataset.act; if (!a) return;
+  if (a === 'start') { btStart(); return; }
+  if (a === 'stop') { pause(); btStop(); return; }
+  if (a === 'copy') {
+    try { navigator.clipboard.writeText(logLines.join('\n')).then(() => blog('лог скопирован')).catch(() => blog('не удалось скопировать — сделай скриншот')); }
+    catch (err) { blog('не удалось скопировать — сделай скриншот'); }
+    return;
+  }
+  if (a === 's+' || a === 's-') {
+    if (liveSpeed < 0.2) { blog('лента стоит — сначала «СТАРТ ленты»'); return; }
+    const base = cmdSpeed !== null ? cmdSpeed : liveSpeed;
+    btSpeed(base + (a === 's+' ? 0.5 : -0.5)); return;
+  }
+  if (a === 'i+' || a === 'i-') {
+    const base = cmdIncl !== null ? cmdIncl : liveIncl;
+    btIncl(base + (a === 'i+' ? 1 : -1));
+  }
+});
+
+/* ===== Вкладки, редактор тренировок, статистика ===== */
+function showView(v){
+  ['Run', 'Edit', 'Stats'].forEach(n => { $('view' + n).hidden = n !== v; });
+  [...$('tabs').children].forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  if (v === 'Edit') renderEditor();
+  if (v === 'Stats') renderStats();
+}
+$('tabs').addEventListener('click', e => { if (e.target.dataset.v) showView(e.target.dataset.v); });
+function armed(btn, label, fn){
+  if (btn.dataset.armed) { delete btn.dataset.armed; btn.textContent = btn.dataset.orig; fn(); return; }
+  btn.dataset.orig = btn.textContent; btn.dataset.armed = '1'; btn.textContent = label;
+  setTimeout(() => { if (btn.dataset.armed) { delete btn.dataset.armed; btn.textContent = btn.dataset.orig; } }, 3000);
+}
+let edIdx = 0;
+function busy(){ if (running) { $('edInfo').textContent = 'Сначала останови тренировку'; return true; } return false; }
+function persist(){ workouts.forEach((w, i) => { w.id = i; }); saveJSON('tt_workouts', workouts); renderPicker(); }
+function num(x, lo, hi, d){ x = parseFloat(String(x).replace(',', '.')); return isFinite(x) ? Math.min(Math.max(x, lo), hi) : d; }
+function readRows(){
+  return [...$('edRows').children].map(r => {
+    const v = [...r.querySelectorAll('input')].map(i => i.value);
+    return [v[0].trim() || 'Этап', num(v[1], 0.5, 240, 5), num(v[2], 0.5, SAFE_MAX_SPEED, 4), Math.round(num(v[3], 0, SAFE_MAX_INCL, 0))];
+  });
+}
+function updInfo(){
+  const rows = readRows();
+  $('edInfo').textContent = 'Этапов: ' + rows.length + ', всего ' + fm(rows.reduce((a, x) => a + x[1], 0)) + ' мин. Скорость не больше ' + SAFE_MAX_SPEED + ' км/ч, наклон не больше ' + SAFE_MAX_INCL + '%.';
+}
+function addRow(st){
+  const r = document.createElement('div'); r.className = 'ed-row';
+  const mk = (val, type, attrs) => { const i = document.createElement('input'); i.type = type; Object.assign(i, attrs); i.value = val; i.addEventListener('input', updInfo); r.appendChild(i); };
+  mk(st[0], 'text', {}); mk(st[1], 'number', { min: 0.5, step: 0.5 }); mk(st[2], 'number', { min: 0.5, max: SAFE_MAX_SPEED, step: 0.1 }); mk(st[3], 'number', { min: 0, max: SAFE_MAX_INCL, step: 1 });
+  const x = document.createElement('button'); x.textContent = '✕'; x.addEventListener('click', () => { r.remove(); updInfo(); });
+  r.appendChild(x); $('edRows').appendChild(r);
+}
+function renderEditor(){
+  const sel = $('edSel'); sel.innerHTML = '';
+  workouts.forEach((w, i) => { const o = document.createElement('option'); o.value = i; o.textContent = w.title; sel.appendChild(o); });
+  if (edIdx >= workouts.length) edIdx = 0;
+  sel.value = edIdx;
+  const w = workouts[edIdx];
+  $('edName').value = w.title;
+  $('edRows').innerHTML = '';
+  w.stages.forEach(addRow);
+  updInfo();
+}
+$('edSel').addEventListener('change', e => { edIdx = +e.target.value; renderEditor(); });
+$('edAdd').addEventListener('click', () => { addRow(['Этап', 5, 5.0, 3]); updInfo(); });
+$('edNew').addEventListener('click', () => {
+  if (busy()) return;
+  workouts.push({ id: workouts.length, title: 'Новая тренировка', stages: [['Разминка', 5, 4.0, 0], ['Основная часть', 20, 6.0, 5], ['Заминка', 5, 4.0, 0]] });
+  edIdx = workouts.length - 1; persist(); renderEditor();
+});
+$('edSave').addEventListener('click', () => {
+  if (busy()) return;
+  const rows = readRows(); if (!rows.length) { $('edInfo').textContent = 'Добавь хотя бы один этап'; return; }
+  workouts[edIdx].title = $('edName').value.trim() || 'Без названия'; workouts[edIdx].stages = rows;
+  persist(); renderEditor(); selectWorkout(edIdx);
+  $('edInfo').textContent = 'Сохранено ✓';
+});
+$('edDel').addEventListener('click', e => {
+  if (busy()) return;
+  if (workouts.length < 2) { $('edInfo').textContent = 'Нельзя удалить последнюю тренировку'; return; }
+  armed(e.target, 'Точно удалить?', () => { workouts.splice(edIdx, 1); edIdx = 0; persist(); renderEditor(); selectWorkout(0); });
+});
+$('edReset').addEventListener('click', e => {
+  if (busy()) return;
+  armed(e.target, 'Точно сбросить?', () => { workouts = JSON.parse(JSON.stringify(DEFAULT_WORKOUTS)); edIdx = 0; persist(); renderEditor(); selectWorkout(0); });
+});
+
+function renderStats(){
+  const h = loadJSON('tt_history', []);
+  const mins = h.reduce((a, x) => a + x.done / 60, 0), km = h.reduce((a, x) => a + x.km, 0);
+  const cards = $('stCards'); cards.innerHTML = '';
+  [['тренировок', h.length], ['минут', Math.round(mins)], ['км', fm(km)]].forEach(([l, v]) => {
+    const d = document.createElement('div'); d.className = 'readout';
+    const a = document.createElement('div'); a.className = 'label'; a.textContent = l;
+    const b = document.createElement('div'); b.className = 'val'; b.textContent = v;
+    d.append(a, b); cards.appendChild(d);
+  });
+  const now = new Date();
+  const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
+  const weeks = [];
+  for (let i = 7; i >= 0; i--) { const st = new Date(mon); st.setDate(st.getDate() - 7 * i); weeks.push({ st, min: 0 }); }
+  h.forEach(x => { const t = new Date(x.t); for (let i = weeks.length - 1; i >= 0; i--) if (t >= weeks[i].st) { weeks[i].min += x.done / 60; break; } });
+  const mx = Math.max(1, ...weeks.map(w => w.min));
+  const bars = $('stBars'); bars.innerHTML = '';
+  weeks.forEach(w => {
+    const c = document.createElement('div'); c.className = 'bar';
+    const v = document.createElement('div'); v.textContent = Math.round(w.min) || '';
+    const f = document.createElement('div'); f.className = 'fill'; f.style.height = Math.round(w.min / mx * 80) + 'px';
+    const l = document.createElement('div'); l.textContent = w.st.getDate() + '.' + String(w.st.getMonth() + 1).padStart(2, '0');
+    c.append(v, f, l); bars.appendChild(c);
+  });
+  const list = $('stList'); list.innerHTML = '';
+  h.slice(-10).reverse().forEach(x => {
+    const r = document.createElement('div'); r.className = 'st-row';
+    r.textContent = new Date(x.t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) + ' · ' + x.w + ' · ' + Math.round(x.done / 60) + ' мин · ' + fm(x.km) + ' км' + (x.ok ? '' : ' (не до конца)');
+    list.appendChild(r);
+  });
+  if (!h.length) list.textContent = 'Пока нет тренировок. Первая появится здесь после запуска.';
+}
+$('stClear').addEventListener('click', e => armed(e.target, 'Точно очистить?', () => { saveJSON('tt_history', []); renderStats(); }));
+window.addEventListener('pagehide', () => saveSession(false));
+renderStats();
+</script>
+<script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');</script>
+</body>
+</html>
