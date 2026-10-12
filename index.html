@@ -43,7 +43,8 @@
   .ringin{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
   #stageName{font-size:15px;color:var(--mut);font-weight:600;max-width:70%;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #timer{font-size:clamp(40px,12vw,54px);font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.05}
-  .rsp{display:flex;gap:4px;align-items:center;color:var(--ac);font-weight:800;font-size:18px}.rsp .i{width:18px;height:18px}
+  .ringstats{display:flex;align-items:stretch;margin-top:5px}.ringstats>span{min-width:72px;text-align:center;padding:0 8px}.ringstats>span+span{border-left:1px solid var(--line)}
+  .ringstats small{display:block;color:var(--mut);font-size:9px;font-weight:600}.ringstats b{display:block;color:var(--ac);font-size:13px;font-weight:800;font-variant-numeric:tabular-nums}
   .cards2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   .mc{background:var(--card);border-radius:16px;padding:12px;box-shadow:var(--sh);display:flex;gap:10px;align-items:center}
   .mc small{display:block;color:var(--mut);font-size:12px;font-weight:600}
@@ -76,6 +77,8 @@
   .gl{stroke:var(--line);stroke-width:1}.gt{fill:var(--mut);font-size:9px}
   .avg3{display:grid;grid-template-columns:repeat(3,1fr);text-align:center}
   .avg3>div+div{border-left:1px solid var(--line)}.avg3 small{color:var(--mut);font-size:12px}.avg3 b{display:block;font-size:22px;font-weight:800;margin:2px 0}
+  .days{display:flex;gap:8px;overflow-x:auto;padding:2px 0 10px}.days button{white-space:nowrap;border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:8px 10px;border-radius:12px;font:600 12px 'Manrope',system-ui,sans-serif;cursor:pointer}.days button.on{background:var(--ac);border-color:var(--ac);color:#fff}
+  .day-empty{color:var(--mut);font-size:13px}.day-summary{color:var(--mut);font-size:13px;margin:2px 0 8px}.session{border-top:1px solid var(--line);padding:10px 0}.session:first-of-type{border-top:0}.session b{display:block;font-size:14px}.session small{display:block;color:var(--mut);font-size:12px;margin-top:2px}
   .form label{display:flex;align-items:center;justify-content:space-between;padding:8px 0;font-weight:600;font-size:14px}
   .form input[type=number]{width:90px;text-align:right;padding:9px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:600 14px 'Manrope',system-ui,sans-serif}
   .form input[type=checkbox]{width:22px;height:22px;accent-color:var(--ac)}
@@ -100,12 +103,12 @@
 <main id="app">
 
 <section id="s-run">
-  <header class="top"><h1>Тренировка</h1><button class="ib" id="goStats" aria-label="Статистика"><span class="i" data-i="cal"></span></button></header>
+  <header class="top"><h1>Тренировка</h1></header>
   <button class="sel" id="selBtn"><span class="i" data-i="run"></span><span id="selTxt"></span><span class="i" data-i="down"></span></button>
   <div class="ringwrap">
     <svg class="ring" viewBox="0 0 240 240"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF8A3D"/><stop offset="1" stop-color="#FF5A1F"/></linearGradient></defs>
       <circle class="trk" cx="120" cy="120" r="104"/><circle class="arc" id="arc" cx="120" cy="120" r="104" stroke="url(#g)" transform="rotate(-90 120 120)"/></svg>
-    <div class="ringin"><div id="stageName"></div><div id="timer">00:00</div><div class="rsp"><span class="i" data-i="flame"></span><span id="rSpeed">—</span></div></div>
+    <div class="ringin"><div id="stageName"></div><div id="timer">00:00</div><div class="ringstats"><span><small>Прошло</small><b id="elapsed">00:00</b></span><span><small>Расстояние</small><b id="distance">0,00 км</b></span></div></div>
   </div>
   <div class="cards2">
     <div class="mc"><span class="i" data-i="gauge"></span><div><small>Скорость</small><b id="speedVal">—</b></div></div>
@@ -145,8 +148,9 @@
   <header class="top"><h1>Статистика</h1></header>
   <div class="chips" id="rangeChips"></div>
   <div class="cards2"><div class="mc big" id="stA"></div><div class="mc big" id="stB"></div></div>
-  <div class="card"><h3>Калории <small>≈ оценка</small></h3><div id="chart"></div></div>
+  <div class="card"><h3>Расстояние <small>км</small></h3><div id="chart"></div></div>
   <div class="card"><h3>Средние показатели</h3><div class="avg3" id="stAvg"></div></div>
+  <div class="card"><h3>Тренировки по дням</h3><div class="days" id="dayList"></div><div id="dayDetails"></div></div>
 </section>
 
 <section id="s-set" hidden>
@@ -261,7 +265,6 @@ function go(id){
   if (id === 'list') renderList(); if (id === 'stats') renderStats(); if (id === 'set') renderSet();
 }
 document.querySelectorAll('#nav button').forEach(b => b.addEventListener('click', () => { if (b.dataset.go === 'list') listMode = 'edit'; go(b.dataset.go); }));
-$('goStats').onclick = () => go('stats');
 $('goBt').onclick = () => go('bt');
 $('btBack').onclick = () => go('run');
 $('listBack').onclick = () => go('run');
@@ -299,7 +302,8 @@ function render(){
   if (!current) return;
   const st = current.stages[stageIdx], tot = Math.round(st[1] * 60), nx = current.stages[stageIdx + 1];
   $('stageName').textContent = st[0]; $('timer').textContent = mmss(secondsLeft);
-  $('rSpeed').textContent = st[2].toFixed(1); $('speedVal').textContent = st[2].toFixed(1); $('inclineVal').textContent = st[3] + '%';
+  $('elapsed').textContent = mmss(ses.sec); $('distance').textContent = ses.km.toFixed(2).replace('.', ',') + ' км';
+  $('speedVal').textContent = st[2].toFixed(1); $('inclineVal').textContent = st[3] + '%';
   $('nextStage').textContent = nx ? 'Далее: ' + nx[0] + ' — ' + nx[2].toFixed(1) + ' км/ч, ' + nx[3] + '%' : 'Это последний этап';
   $('arc').style.strokeDashoffset = C * (secondsLeft / tot);
 }
@@ -312,7 +316,7 @@ function selectWorkout(id){
 function tick(){
   secondsLeft--;
   const st = current.stages[stageIdx];
-  const v = (cp && liveSpeed > 0.2) ? liveSpeed : st[2], inc = (cp && liveIncl !== null) ? liveIncl : st[3];
+  const v = cp ? Math.max(0, liveSpeed) : st[2], inc = (cp && liveIncl !== null) ? liveIncl : st[3];
   ses.sec++; ses.km += v / 3600; ses.kc += kcalMin(v, inc, S.weight) / 60; ses.sp += v; ses.inc += inc;
   if (secondsLeft <= 3 && secondsLeft > 0) beep(600, 0.08);
   if (secondsLeft <= 0) {
@@ -416,28 +420,56 @@ $('edReset').onclick = e => {
 
 /* ===== stats ===== */
 let rng = 7;
+let selectedDay = null;
 const RANGES = [[7, 'Неделя'], [30, 'Месяц'], [90, '3 месяца'], [365, 'Год']];
-const kcOf = x => x.kc != null ? x.kc : Math.round(S.weight * 0.75 * x.km);
 function dur(min){ const h = Math.floor(min / 60), m = Math.round(min % 60); return h ? h + ' ч ' + m + ' мин' : m + ' мин'; }
+const kmText = km => (Math.round(km * 100) / 100).toFixed(2).replace('.', ',') + ' км';
+function dayKey(t){ const d = new Date(t); return isNaN(d) ? '' : d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 function card(el, label, val, delta, good){
   el.innerHTML = ''; const a = document.createElement('small'), b = document.createElement('b'), d = document.createElement('span');
   a.textContent = label; b.textContent = val; d.textContent = delta; d.className = good ? 'up' : 'dn'; el.append(a, b, d);
 }
+function renderDayDetails(byDay){
+  const list = $('dayList'), details = $('dayDetails'); list.innerHTML = ''; details.innerHTML = '';
+  const keys = [...byDay.keys()].sort().reverse();
+  if (!keys.length) { details.className = 'day-empty'; details.textContent = 'В выбранном периоде тренировок пока нет.'; return; }
+  if (!selectedDay || !byDay.has(selectedDay)) selectedDay = keys[0];
+  keys.forEach(k => {
+    const sessions = byDay.get(k), b = document.createElement('button'), d = new Date(k + 'T12:00:00');
+    b.textContent = d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) + ' · ' + kmText(sessions.reduce((s, x) => s + (Number(x.km) || 0), 0));
+    b.className = k === selectedDay ? 'on' : '';
+    b.onclick = () => { selectedDay = k; renderDayDetails(byDay); };
+    list.appendChild(b);
+  });
+  details.className = '';
+  const sessions = byDay.get(selectedDay).slice().sort((a, b) => new Date(a.t) - new Date(b.t));
+  const summary = document.createElement('div'); summary.className = 'day-summary';
+  summary.textContent = sessions.length + ' ' + (sessions.length === 1 ? 'тренировка' : sessions.length < 5 ? 'тренировки' : 'тренировок') + ' · ' + dur(sessions.reduce((s, x) => s + (Number(x.done) || 0), 0) / 60) + ' · ' + kmText(sessions.reduce((s, x) => s + (Number(x.km) || 0), 0));
+  details.appendChild(summary);
+  sessions.forEach(x => {
+    const row = document.createElement('div'), title = document.createElement('b'), meta = document.createElement('small'); row.className = 'session';
+    title.textContent = String(x.w || 'Тренировка');
+    const time = new Date(x.t).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    meta.textContent = time + ' · ' + dur((Number(x.done) || 0) / 60) + ' · ' + kmText(Number(x.km) || 0) + ' · ' + (Number(x.sp) || 0).toFixed(1) + ' км/ч · ' + (x.ok ? 'завершена' : 'остановлена');
+    row.append(title, meta); details.appendChild(row);
+  });
+}
 function renderStats(){
   const rc = $('rangeChips'); rc.innerHTML = '';
-  RANGES.forEach(([d, l]) => { const b = document.createElement('button'); b.textContent = l; b.className = d === rng ? 'on' : ''; b.onclick = () => { rng = d; renderStats(); }; rc.appendChild(b); });
+  RANGES.forEach(([d, l]) => { const b = document.createElement('button'); b.textContent = l; b.className = d === rng ? 'on' : ''; b.onclick = () => { rng = d; selectedDay = null; renderStats(); }; rc.appendChild(b); });
   const H = load('tt_history', []), now = Date.now(), D = 864e5;
   const inR = (x, a, b) => { const t = new Date(x.t).getTime(); return t > now - b * D && t <= now - a * D; };
   const cur = H.filter(x => inR(x, 0, rng)), prev = H.filter(x => inR(x, rng, 2 * rng));
   const tm = a => a.reduce((s, x) => s + x.done / 60, 0);
-  const dc = cur.length - prev.length, dt = tm(cur) - tm(prev);
+  const km = a => a.reduce((s, x) => s + (Number(x.km) || 0), 0);
+  const dc = cur.length - prev.length, dk = km(cur) - km(prev);
   card($('stA'), 'Всего тренировок', cur.length, (dc >= 0 ? '+' : '−') + Math.abs(dc) + (dc >= 0 ? ' ↗' : ' ↘'), dc >= 0);
-  card($('stB'), 'Общее время', dur(tm(cur)), (dt >= 0 ? '+' : '−') + dur(Math.abs(dt)) + (dt >= 0 ? ' ↗' : ' ↘'), dt >= 0);
+  card($('stB'), 'Расстояние', kmText(km(cur)), (dk >= 0 ? '+' : '−') + kmText(Math.abs(dk)) + (dk >= 0 ? ' ↗' : ' ↘'), dk >= 0);
   const size = [1, 5, 7, 30][RANGES.findIndex(r => r[0] === rng)], n = Math.ceil(rng / size), b = new Array(n).fill(0);
-  cur.forEach(x => { const k = n - 1 - Math.floor((now - new Date(x.t).getTime()) / (size * D)); if (k >= 0 && k < n) b[k] += kcOf(x); });
-  const mx = Math.max(100, Math.ceil(Math.max(...b) / 100) * 100), bw = 288 / n, step = Math.ceil(n / 6);
+  cur.forEach(x => { const k = n - 1 - Math.floor((now - new Date(x.t).getTime()) / (size * D)); if (k >= 0 && k < n) b[k] += Number(x.km) || 0; });
+  const mx = Math.max(0.5, Math.ceil(Math.max(...b) * 2) / 2), bw = 288 / n, step = Math.ceil(n / 6);
   let g = '<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FF8A3D"/><stop offset="1" stop-color="#FF5A1F"/></linearGradient></defs>';
-  for (let i = 0; i <= 4; i++) { const y = 128 - i * 30; g += '<line class="gl" x1="28" x2="316" y1="' + y + '" y2="' + y + '"/><text class="gt" x="24" y="' + (y + 3) + '" text-anchor="end">' + Math.round(mx * i / 4) + '</text>'; }
+  for (let i = 0; i <= 4; i++) { const y = 128 - i * 30; g += '<line class="gl" x1="28" x2="316" y1="' + y + '" y2="' + y + '"/><text class="gt" x="24" y="' + (y + 3) + '" text-anchor="end">' + fm(mx * i / 4) + '</text>'; }
   b.forEach((v, i) => {
     const h = v / mx * 120; g += '<rect x="' + (28 + i * bw + bw * 0.2).toFixed(1) + '" y="' + (128 - h).toFixed(1) + '" width="' + (bw * 0.6).toFixed(1) + '" height="' + (v ? Math.max(h, 2) : 0).toFixed(1) + '" rx="2" fill="url(#bg)"/>';
     if (i % step === 0) { const d = new Date(now - (n - i) * size * D + D); g += '<text class="gt" x="' + (28 + i * bw + bw / 2).toFixed(1) + '" y="144" text-anchor="middle">' + String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + '</text>'; }
@@ -450,6 +482,9 @@ function renderStats(){
     const d = document.createElement('div'), a = document.createElement('small'), bb = document.createElement('b'), c = document.createElement('small');
     a.textContent = l; bb.textContent = v; c.textContent = u; d.append(a, bb, c); av.appendChild(d);
   });
+  const byDay = new Map();
+  cur.forEach(x => { const k = dayKey(x.t); if (k) { if (!byDay.has(k)) byDay.set(k, []); byDay.get(k).push(x); } });
+  renderDayDetails(byDay);
 }
 
 /* ===== settings ===== */
@@ -517,7 +552,13 @@ const clampSpeed = k => Math.min(Math.max(k, devMinSpeed), Math.min(S.maxSpeed, 
 const clampIncl = p => Math.min(Math.max(p, Math.max(0, devMinIncl)), Math.min(S.maxIncl, devMaxIncl));
 function btSpeed(kmh){ kmh = clampSpeed(kmh); cmdSpeed = kmh; const v = Math.round(kmh * 100); return sendCP([0x02, v & 255, (v >> 8) & 255], 'скорость ' + kmh.toFixed(1)); }
 function btIncl(pc){ pc = Math.round(clampIncl(pc) * 10) / 10; cmdIncl = pc; const v = Math.round(pc * 10); return sendCP([0x03, v & 255, (v >> 8) & 255], 'наклон ' + pc + '%'); }
-async function btStart(){ if (!cp) return; ctlEpoch++; cmdSpeed = null; cmdIncl = null; await sendCP([0x00], 'запрос управления'); await sendCP([0x07], 'старт'); }
+async function btStart(){
+  if (!cp) return null;
+  const my = ++ctlEpoch; cmdSpeed = null; cmdIncl = null;
+  await sendCP([0x00], 'запрос управления'); if (my !== ctlEpoch || !cp) return null;
+  await sendCP([0x07], 'старт');
+  return my === ctlEpoch && cp ? my : null;
+}
 function btPause(){ if (cp) { ctlEpoch++; return sendCP([0x08, 0x02], 'пауза'); } }
 async function btStop(){
   if (!cp) return;
@@ -531,7 +572,27 @@ async function btStop(){
 function applyStage(start){
   if (!cp || !current) return;
   const st = current.stages[stageIdx];
-  (async () => { if (start) await btStart(); await btSpeed(st[2]); await btIncl(st[3]); })();
+  (async () => {
+    const my = start ? await btStart() : ++ctlEpoch;
+    if (my === null || my !== ctlEpoch || !cp) return;
+    if (start) {
+      const deadline = Date.now() + 10000;
+      while (my === ctlEpoch && cp && liveSpeed <= 0.2 && Date.now() < deadline) await wait(250);
+      if (my !== ctlEpoch || !cp) return;
+      if (liveSpeed > 0.2) blog('лента тронулась — задаю параметры этапа');
+      else blog('нет данных о движении — задаю параметры этапа');
+    }
+    const speedBefore = liveSpeed, targetSpeed = clampSpeed(st[2]);
+    await btSpeed(targetSpeed); if (my !== ctlEpoch || !cp) return;
+    await btIncl(st[3]);
+    if (!start) return;
+    await wait(4000);
+    if (my !== ctlEpoch || !cp || cmdSpeed !== targetSpeed) return;
+    if (targetSpeed > speedBefore + 0.2 && liveSpeed <= speedBefore + 0.1) {
+      blog('скорость не выросла — повторяю');
+      await btSpeed(targetSpeed);
+    }
+  })();
 }
 function onCP(e){ const v = e.target.value; if (v.byteLength >= 3 && v.getUint8(0) === 0x80 && pending) pending(v.getUint8(1), v.getUint8(2), hex(v)); }
 function onData(e){
