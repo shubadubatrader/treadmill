@@ -49,7 +49,6 @@
   .mc{background:var(--card);border-radius:16px;padding:12px;box-shadow:var(--sh);display:flex;gap:10px;align-items:center}
   .mc small{display:block;color:var(--mut);font-size:12px;font-weight:600}
   .mc b{color:var(--ac);font-size:22px;font-weight:800}.mc>.i{color:var(--ac);width:26px;height:26px}
-  .mc.hr{grid-column:1/-1}.mc.hr b{font-variant-numeric:tabular-nums}
   .mc.big{flex-direction:column;align-items:flex-start;gap:2px}.mc.big b{color:var(--ink);font-size:24px}
   .up{color:var(--gr);font-size:12px;font-weight:800}.dn{color:var(--rd);font-size:12px;font-weight:800}
   .next{font-size:12px;color:var(--mut);margin:10px 2px 0;min-height:16px}
@@ -76,7 +75,7 @@
   .card{background:var(--card);border-radius:18px;padding:14px;box-shadow:var(--sh);margin:12px 0}
   .card h3{margin:0 0 8px;font-size:15px}.card h3 small{color:var(--mut);font-weight:600;font-size:11px}
   .gl{stroke:var(--line);stroke-width:1}.gt{fill:var(--mut);font-size:9px}
-  .avg3{display:grid;grid-template-columns:repeat(4,1fr);text-align:center}
+  .avg3{display:grid;grid-template-columns:repeat(3,1fr);text-align:center}
   .avg3>div+div{border-left:1px solid var(--line)}.avg3 small{color:var(--mut);font-size:12px}.avg3 b{display:block;font-size:22px;font-weight:800;margin:2px 0}
   .days{display:flex;gap:8px;overflow-x:auto;padding:2px 0 10px}.days button{white-space:nowrap;border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:8px 10px;border-radius:12px;font:600 12px 'Manrope',system-ui,sans-serif;cursor:pointer}.days button.on{background:var(--ac);border-color:var(--ac);color:#fff}
   .day-empty{color:var(--mut);font-size:13px}.day-summary{color:var(--mut);font-size:13px;margin:2px 0 8px}.session{border-top:1px solid var(--line);padding:10px 0}.session:first-of-type{border-top:0}.session b{display:block;font-size:14px}.session small{display:block;color:var(--mut);font-size:12px;margin-top:2px}
@@ -115,7 +114,6 @@
   <div class="cards2">
     <div class="mc"><span class="i" data-i="gauge"></span><div><small>Скорость</small><b id="speedVal">—</b></div></div>
     <div class="mc"><span class="i" data-i="pulse"></span><div><small>Наклон</small><b id="inclineVal">—</b></div></div>
-    <div class="mc hr"><span class="i" data-i="pulse"></span><div><small>Пульс, уд/мин</small><b id="heartVal">—</b></div></div>
   </div>
   <div class="next" id="nextStage"></div>
   <div class="ctl">
@@ -125,7 +123,6 @@
   </div>
   <div class="seg" id="progressTrack"></div>
   <button class="conn" id="goBt"><span class="i" data-i="link"></span><span>Подключить дорожку</span><em id="btStatus">не подключена</em></button>
-  <button class="conn" id="heartConnect"><span class="i" data-i="pulse"></span><span>Подключить часы</span><em id="heartStatus">не подключены</em></button>
   <div class="live" id="btLive"></div>
 </section>
 
@@ -248,8 +245,10 @@ const DEFAULT_WORKOUTS = [
   { title: '5. Длинная', stages: [['Разминка', 5, 5.0, 3], ['Основная часть', 50, 6.5, 5], ['Заминка', 5, 4.0, 0]] },
   { title: '6. Проверка', stages: [['Тест 1', 0.5, 2.0, 1], ['Тест 2', 0.5, 3.0, 2], ['Тест 3', 0.5, 2.0, 0]] },
 ];
-let workouts = load('tt_workouts', null) || clone(DEFAULT_WORKOUTS);
-let S = Object.assign({ weight: 67, maxSpeed: 6.5, maxIncl: 12, sound: true, theme: 'system' }, load('tt_settings', {}));
+const loadedWorkouts = cleanW(load('tt_workouts', []));
+let workouts = loadedWorkouts.length ? loadedWorkouts : clone(DEFAULT_WORKOUTS);
+const loadedSettings = load('tt_settings', {});
+let S = { weight: num(loadedSettings.weight, 30, 250, 67), maxSpeed: num(loadedSettings.maxSpeed, 1, 12, 6.5), maxIncl: num(loadedSettings.maxIncl, 0, 15, 12), sound: loadedSettings.sound !== false, theme: ['light', 'dark'].includes(loadedSettings.theme) ? loadedSettings.theme : 'system' };
 function applyTheme(){
   const theme = ['light', 'dark'].includes(S.theme) ? S.theme : 'system';
   if (theme === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme = theme;
@@ -286,7 +285,7 @@ $('selBtn').onclick = () => { if (running) return toast('Останови тре
 /* ===== run screen ===== */
 const C = 653.45;
 let current = null, stageIdx = 0, secondsLeft = 0, running = false, tickHandle = null, audioCtx = null, wakeLock = null;
-let ses = { sec: 0, km: 0, kc: 0, sp: 0, inc: 0, hrSum: 0, hrCount: 0 };
+let ses = { sec: 0, km: 0, kc: 0, sp: 0, inc: 0 };
 function beep(f, len){
   if (!S.sound) return;
   try {
@@ -299,23 +298,29 @@ function beep(f, len){
 }
 function saveSession(finished){
   if (current && ses.sec >= 60) {
-    const h = load('tt_history', []);
-    h.push({ t: new Date().toISOString(), w: current.title, done: ses.sec, km: Math.round(ses.km * 100) / 100, ok: !!finished, kc: Math.round(ses.kc), sp: Math.round(ses.sp / ses.sec * 10) / 10, inc: Math.round(ses.inc / ses.sec * 10) / 10, hr: ses.hrCount ? Math.round(ses.hrSum / ses.hrCount) : null, hrn: ses.hrCount });
+    const h = cleanHistory(load('tt_history', []));
+    h.push({ t: new Date().toISOString(), w: current.title, done: ses.sec, km: Math.round(ses.km * 100) / 100, ok: !!finished, kc: Math.round(ses.kc), sp: Math.round(ses.sp / ses.sec * 10) / 10, inc: Math.round(ses.inc / ses.sec * 10) / 10 });
     save('tt_history', h.slice(-1000));
   }
-  ses = { sec: 0, km: 0, kc: 0, sp: 0, inc: 0, hrSum: 0, hrCount: 0 };
+  ses = { sec: 0, km: 0, kc: 0, sp: 0, inc: 0 };
 }
 function setRun(r){ $('startBtn').firstChild.innerHTML = icon(r ? 'pause' : 'play'); $('startBtn').lastChild.textContent = r ? 'Пауза' : 'Старт'; $('selBtn').disabled = r; }
 function renderSegs(){
   const box = $('progressTrack'); box.innerHTML = '';
   current.stages.forEach((st, i) => { const e = document.createElement('i'); e.style.flexGrow = st[1]; e.style.flexBasis = '0'; e.className = i < stageIdx ? 'd' : i === stageIdx ? 'a' : ''; box.appendChild(e); });
 }
+function renderMachineValues(){
+  if (!current) return;
+  const st = current.stages[stageIdx], now = Date.now(), speedFresh = cp && lastSpeedAt && now - lastSpeedAt < 5000, inclineFresh = cp && lastInclAt && now - lastInclAt < 5000;
+  $('speedVal').textContent = speedFresh && liveSpeed !== null ? liveSpeed.toFixed(1) : cp ? '—' : st[2].toFixed(1);
+  $('inclineVal').textContent = inclineFresh && liveIncl !== null ? fm(liveIncl) + '%' : cp ? '—' : st[3] + '%';
+}
 function render(){
   if (!current) return;
   const st = current.stages[stageIdx], tot = Math.round(st[1] * 60), nx = current.stages[stageIdx + 1];
   $('stageName').textContent = st[0]; $('timer').textContent = mmss(secondsLeft);
   $('elapsed').textContent = mmss(ses.sec); $('distance').textContent = ses.km.toFixed(2).replace('.', ',') + ' км';
-  $('speedVal').textContent = st[2].toFixed(1); $('inclineVal').textContent = st[3] + '%';
+  renderMachineValues();
   $('nextStage').textContent = nx ? 'Далее: ' + nx[0] + ' — ' + nx[2].toFixed(1) + ' км/ч, ' + nx[3] + '%' : 'Это последний этап';
   $('arc').style.strokeDashoffset = C * (secondsLeft / tot);
 }
@@ -328,10 +333,9 @@ function selectWorkout(id){
 function tick(){
   secondsLeft--;
   const st = current.stages[stageIdx];
-  const v = cp ? Math.max(0, liveSpeed) : st[2], inc = (cp && liveIncl !== null) ? liveIncl : st[3];
+  const now = Date.now(), speedFresh = cp && lastSpeedAt && now - lastSpeedAt < 5000, inclineFresh = cp && lastInclAt && now - lastInclAt < 5000;
+  const v = speedFresh && liveSpeed !== null ? Math.max(0, liveSpeed) : cp ? 0 : st[2], inc = inclineFresh && liveIncl !== null ? liveIncl : st[3];
   ses.sec++; ses.km += v / 3600; ses.kc += kcalMin(v, inc, S.weight) / 60; ses.sp += v; ses.inc += inc;
-  if (liveHeartRate !== null && Date.now() - lastHeartAt < 10000) { ses.hrSum += liveHeartRate; ses.hrCount++; }
-  else if (liveHeartRate !== null) clearHeartRate();
   if (secondsLeft <= 3 && secondsLeft > 0) beep(600, 0.08);
   if (secondsLeft <= 0) {
     if (stageIdx < current.stages.length - 1) {
@@ -350,7 +354,7 @@ function play(){
   if (!current) selectWorkout(0);
   running = true; setRun(true);
   tickHandle = setInterval(tick, 1000);
-  requestWakeLock(); applyStage(true); autoConnectHeart();
+  requestWakeLock(); applyStage(true);
 }
 function pause(){ running = false; setRun(false); clearInterval(tickHandle); releaseWakeLock(); }
 $('startBtn').onclick = () => { if (running) { pause(); btPause(); } else play(); };
@@ -464,15 +468,14 @@ function renderDayDetails(byDay){
     const row = document.createElement('div'), title = document.createElement('b'), meta = document.createElement('small'); row.className = 'session';
     title.textContent = String(x.w || 'Тренировка');
     const time = new Date(x.t).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-    const heart = x.hr != null && isFinite(Number(x.hr)) ? ' · пульс ' + Math.round(Number(x.hr)) : '';
-    meta.textContent = time + ' · ' + dur((Number(x.done) || 0) / 60) + ' · ' + kmText(Number(x.km) || 0) + ' · ' + (Number(x.sp) || 0).toFixed(1) + ' км/ч' + heart + ' · ' + (x.ok ? 'завершена' : 'остановлена');
+    meta.textContent = time + ' · ' + dur((Number(x.done) || 0) / 60) + ' · ' + kmText(Number(x.km) || 0) + ' · ' + (Number(x.sp) || 0).toFixed(1) + ' км/ч · ' + (x.ok ? 'завершена' : 'остановлена');
     row.append(title, meta); details.appendChild(row);
   });
 }
 function renderStats(){
   const rc = $('rangeChips'); rc.innerHTML = '';
   RANGES.forEach(([d, l]) => { const b = document.createElement('button'); b.textContent = l; b.className = d === rng ? 'on' : ''; b.onclick = () => { rng = d; selectedDay = null; renderStats(); }; rc.appendChild(b); });
-  const H = load('tt_history', []), now = Date.now(), D = 864e5;
+  const H = cleanHistory(load('tt_history', [])), now = Date.now(), D = 864e5;
   const inR = (x, a, b) => { const t = new Date(x.t).getTime(); return t > now - b * D && t <= now - a * D; };
   const cur = H.filter(x => inR(x, 0, rng)), prev = H.filter(x => inR(x, rng, 2 * rng));
   const tm = a => a.reduce((s, x) => s + x.done / 60, 0);
@@ -491,10 +494,9 @@ function renderStats(){
   });
   $('chart').innerHTML = '<svg viewBox="0 0 320 150" width="100%">' + g + '</svg>';
   const mean = a => a.length ? a.reduce((s, v) => s + v, 0) / a.length : null;
-  const hrRows = cur.filter(x => x.hr != null && isFinite(Number(x.hr))), hrWeight = hrRows.reduce((s, x) => s + (Number(x.hrn) || Number(x.done) || 1), 0);
-  const sp = mean(cur.map(x => x.sp != null ? x.sp : (x.done ? x.km / (x.done / 3600) : 0))), inc = mean(cur.filter(x => x.inc != null).map(x => x.inc)), hr = hrWeight ? hrRows.reduce((s, x) => s + Number(x.hr) * (Number(x.hrn) || Number(x.done) || 1), 0) / hrWeight : null, tmAvg = cur.length ? tm(cur) / cur.length : null;
+  const sp = mean(cur.map(x => x.sp != null ? x.sp : (x.done ? x.km / (x.done / 3600) : 0))), inc = mean(cur.filter(x => x.inc != null).map(x => x.inc)), tmAvg = cur.length ? tm(cur) / cur.length : null;
   const av = $('stAvg'); av.innerHTML = '';
-  [['Скорость', sp != null ? sp.toFixed(1) : '—', 'км/ч'], ['Наклон', inc != null ? inc.toFixed(1) : '—', '%'], ['Пульс', hr != null ? Math.round(hr) : '—', 'уд/мин'], ['Время', tmAvg != null ? tmAvg.toFixed(1) : '—', 'мин']].forEach(([l, v, u]) => {
+  [['Скорость', sp != null ? sp.toFixed(1) : '—', 'км/ч'], ['Наклон', inc != null ? inc.toFixed(1) : '—', '%'], ['Время', tmAvg != null ? tmAvg.toFixed(1) : '—', 'мин']].forEach(([l, v, u]) => {
     const d = document.createElement('div'), a = document.createElement('small'), bb = document.createElement('b'), c = document.createElement('small');
     a.textContent = l; bb.textContent = v; c.textContent = u; d.append(a, bb, c); av.appendChild(d);
   });
@@ -513,10 +515,23 @@ $('setSnd').addEventListener('change', e => { S.sound = e.target.checked; save('
 $('setTheme').addEventListener('change', e => { S.theme = e.target.value; applyTheme(); save('tt_settings', S); });
 if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (!['light', 'dark'].includes(S.theme)) applyTheme(); });
 function cleanW(arr){
-  return (Array.isArray(arr) ? arr : []).map(w => ({ title: String((w && w.title) || 'Без названия').slice(0, 60), stages: (Array.isArray(w && w.stages) ? w.stages : []).map(s => [String(s[0] || 'Этап').slice(0, 40), num(s[1], 0.5, 240, 5), num(s[2], 0.5, 12, 4), Math.round(num(s[3], 0, 15, 0))]) })).filter(w => w.stages.length);
+  return (Array.isArray(arr) ? arr.slice(0, 100) : []).map(w => ({
+    title: String((w && w.title) || 'Без названия').slice(0, 60),
+    stages: (Array.isArray(w && w.stages) ? w.stages.slice(0, 200) : []).map(s => {
+      s = Array.isArray(s) ? s : [];
+      return [String(s[0] || 'Этап').slice(0, 40), num(s[1], 0.5, 240, 5), num(s[2], 0.5, 12, 4), Math.round(num(s[3], 0, 15, 0))];
+    })
+  })).filter(w => w.stages.length);
+}
+function cleanHistory(arr){
+  return (Array.isArray(arr) ? arr.slice(-1000) : []).map(x => {
+    const t = new Date(x && x.t), done = num(x && x.done, 0, 86400, 0);
+    if (!x || isNaN(t.getTime()) || done < 1) return null;
+    return { t: t.toISOString(), w: String(x.w || 'Тренировка').slice(0, 60), done, km: num(x.km, 0, 1000, 0), ok: !!x.ok, kc: num(x.kc, 0, 100000, 0), sp: num(x.sp, 0, 30, 0), inc: num(x.inc, -20, 40, 0) };
+  }).filter(Boolean).slice(-1000);
 }
 $('bkCopy').onclick = () => {
-  const txt = JSON.stringify({ v: 1, workouts, history: load('tt_history', []), settings: S });
+  const txt = JSON.stringify({ v: 1, workouts, history: cleanHistory(load('tt_history', [])), settings: S });
   $('bkText').value = txt;
   try { navigator.clipboard.writeText(txt).then(() => toast('Копия скопирована')).catch(() => toast('Не удалось скопировать: выдели текст ниже вручную')); }
   catch (e) { toast('Не удалось скопировать: выдели текст ниже вручную'); }
@@ -526,7 +541,7 @@ $('bkLoad').onclick = () => {
   try {
     const d = JSON.parse($('bkText').value), w = cleanW(d.workouts);
     if (!w.length || !Array.isArray(d.history)) throw new Error('bad');
-    workouts = w; save('tt_history', d.history.slice(-1000));
+    workouts = w; save('tt_history', cleanHistory(d.history));
     if (d.settings) { S = Object.assign(S, { weight: num(d.settings.weight, 30, 250, 67), maxSpeed: num(d.settings.maxSpeed, 1, 12, 6.5), maxIncl: num(d.settings.maxIncl, 0, 15, 12), sound: d.settings.sound !== false, theme: ['light', 'dark'].includes(d.settings.theme) ? d.settings.theme : 'system' }); save('tt_settings', S); }
     persist(); applyTheme(); renderSet(); toast('Копия загружена ✓');
   } catch (e) { toast('Не получилось прочитать копию'); }
@@ -546,89 +561,45 @@ async function requestWakeLock(){
 function releaseWakeLock(){ if (wakeLock) { wakeLock.release(); wakeLock = null; } }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && running && !wakeLock) requestWakeLock(); });
 
-/* ===== Heart Rate: стандартный сервис 0x180D ===== */
-const HR_SERVICE = 0x180D, HR_MEASUREMENT = 0x2A37;
-let heartDevice = null, heartChar = null, liveHeartRate = null, lastHeartAt = 0, heartConnecting = false, heartManualDisconnect = false;
-function setHeartStatus(text, connected){
-  $('heartStatus').textContent = text;
-  $('heartConnect').querySelector('span:nth-child(2)').textContent = connected ? 'Отключить часы' : 'Подключить часы';
-}
-function clearHeartRate(){ liveHeartRate = null; lastHeartAt = 0; $('heartVal').textContent = '—'; }
-function onHeartRate(e){
-  try {
-    const d = e.target.value, wide = d.getUint8(0) & 1, hr = wide ? d.getUint16(1, true) : d.getUint8(1);
-    if (hr < 20 || hr > 250) return;
-    liveHeartRate = hr; lastHeartAt = Date.now(); $('heartVal').textContent = hr;
-  } catch (err) {}
-}
-function onHeartDisconnected(){
-  heartChar = null; clearHeartRate(); setHeartStatus(heartManualDisconnect ? 'не подключены' : 'связь потеряна', false);
-  if (!heartManualDisconnect && load('tt_hr_auto', false) && heartDevice) setTimeout(() => connectHeartDevice(heartDevice, true), 4000);
-}
-async function connectHeartDevice(device, automatic){
-  if (!device || heartConnecting) return;
-  heartConnecting = true; heartManualDisconnect = false; heartDevice = device; setHeartStatus('подключение…', false);
-  try {
-    device.ongattserverdisconnected = onHeartDisconnected;
-    const server = device.gatt.connected ? device.gatt : await device.gatt.connect();
-    const service = await server.getPrimaryService(HR_SERVICE);
-    heartChar = await service.getCharacteristic(HR_MEASUREMENT);
-    await heartChar.startNotifications(); heartChar.addEventListener('characteristicvaluechanged', onHeartRate);
-    save('tt_hr_device', device.id); save('tt_hr_auto', true);
-    setHeartStatus(device.name || 'подключены', true);
-  } catch (e) {
-    heartChar = null; clearHeartRate(); setHeartStatus(automatic ? 'часы недоступны' : 'не удалось подключить', false);
-    if (!automatic) toast('Не удалось подключить часы: ' + e.message);
-  } finally { heartConnecting = false; }
-}
-async function chooseHeart(){
-  if (!navigator.bluetooth) return toast('Web Bluetooth недоступен: открой приложение в Chrome на Android');
-  try {
-    const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [HR_SERVICE] });
-    await connectHeartDevice(device, false);
-  } catch (e) { if (e.name !== 'NotFoundError') toast('Не удалось выбрать часы: ' + e.message); }
-}
-async function autoConnectHeart(){
-  if (!navigator.bluetooth || !navigator.bluetooth.getDevices || !load('tt_hr_auto', false)) return;
-  try {
-    const id = load('tt_hr_device', ''), devices = await navigator.bluetooth.getDevices(), device = devices.find(d => d.id === id);
-    if (device) await connectHeartDevice(device, true);
-  } catch (e) { setHeartStatus('нажми для подключения', false); }
-}
-$('heartConnect').onclick = () => {
-  if (heartDevice && heartDevice.gatt && heartDevice.gatt.connected) {
-    heartManualDisconnect = true; save('tt_hr_auto', false); heartDevice.gatt.disconnect();
-  } else reconnectHeartOrChoose();
-};
-async function reconnectHeartOrChoose(){
-  if (navigator.bluetooth && navigator.bluetooth.getDevices) {
-    try {
-      const id = load('tt_hr_device', ''), devices = await navigator.bluetooth.getDevices(), device = devices.find(d => d.id === id);
-      if (device) { save('tt_hr_auto', true); await connectHeartDevice(device, false); return; }
-    } catch (e) {}
-  }
-  await chooseHeart();
-}
-
 /* ===== Bluetooth: стандартный профиль FTMS (сервис 0x1826) ===== */
-let cp = null, btDevice = null, queue = Promise.resolve(), pending = null, ctlEpoch = 0;
-let liveSpeed = 0, liveIncl = null, lastFlags = null, cmdSpeed = null, cmdIncl = null;
+let cp = null, treadmillDataChar = null, statusChar = null, btDevice = null, queue = Promise.resolve(), pending = null, ctlEpoch = 0, btGeneration = 0;
+let liveSpeed = null, liveIncl = null, lastSpeedAt = 0, lastInclAt = 0, lastFlags = null, cmdSpeed = null, cmdIncl = null;
+let btConnecting = false, btManualDisconnect = false, btReconnectTimer = null, btReconnectAttempt = 0;
 let devMinSpeed = 1.0, devMaxSpeed = 12, devMinIncl = 0, devMaxIncl = 12;
 const logLines = [];
 const RES = { 1: 'успех', 2: 'не поддерживается', 3: 'неверный параметр', 4: 'не удалось', 5: 'нет прав на управление' };
 const hex = v => Array.from(new Uint8Array(v.buffer, v.byteOffset, v.byteLength)).map(b => b.toString(16).padStart(2, '0')).join(' ');
 function blog(m){ logLines.push(new Date().toLocaleTimeString('ru-RU') + ' ' + m); if (logLines.length > 30) logLines.shift(); $('btLog').textContent = logLines.join('\n'); $('btLog').scrollTop = 1e6; }
 function setStatus(t, warn){ const e = $('btStatus'); e.textContent = t; e.classList.toggle('warn', !!warn); }
-function sendCP(bytes, label){
-  queue = queue.then(() => new Promise(async res => {
-    if (!cp) { res(); return; }
-    let done = false;
-    pending = (op, code, raw) => { if (done || op !== bytes[0]) return; done = true; blog(label + ': ' + (RES[code] || code) + (code !== 1 ? ' [' + raw + ']' : '')); res(); };
+function rawCP(bytes, label){
+  const generation = btGeneration;
+  const run = () => new Promise(async resolve => {
+    if (!cp || generation !== btGeneration) { resolve({ code: 0 }); return; }
+    const op = bytes[0], token = { op, finish: null };
+    let timer = null, done = false;
+    token.finish = (code, raw, error) => {
+      if (done) return; done = true; clearTimeout(timer); if (pending === token) pending = null;
+      if (error) blog(label + ': ' + error);
+      else blog(label + ': ' + (RES[code] || code) + (code !== 1 && raw ? ' [' + raw + ']' : ''));
+      resolve({ code, raw });
+    };
+    pending = token;
+    timer = setTimeout(() => token.finish(0, '', 'нет ответа'), 2500);
     try { const buf = new Uint8Array(bytes); if (cp.writeValueWithResponse) await cp.writeValueWithResponse(buf); else await cp.writeValue(buf); }
-    catch (e) { done = true; blog(label + ': ошибка записи ' + e.message); res(); return; }
-    setTimeout(() => { if (!done) { done = true; blog(label + ': нет ответа'); res(); } }, 2000);
-  }));
-  return queue;
+    catch (e) { token.finish(0, '', 'ошибка записи ' + e.message); }
+  });
+  const result = queue.then(run, run);
+  queue = result.then(() => undefined, () => undefined);
+  return result;
+}
+async function sendCP(bytes, label, reacquire = true){
+  let result = await rawCP(bytes, label);
+  if (reacquire && bytes[0] !== 0x00 && result.code === 5 && cp) {
+    blog('управление потеряно — запрашиваю снова');
+    const control = await rawCP([0x00], 'повторный запрос управления');
+    if (control.code === 1) result = await rawCP(bytes, label + ' (повтор)');
+  }
+  return result;
 }
 const clampSpeed = k => Math.min(Math.max(k, devMinSpeed), Math.min(S.maxSpeed, devMaxSpeed));
 const clampIncl = p => Math.min(Math.max(p, Math.max(0, devMinIncl)), Math.min(S.maxIncl, devMaxIncl));
@@ -637,8 +608,8 @@ function btIncl(pc){ pc = Math.round(clampIncl(pc) * 10) / 10; cmdIncl = pc; con
 async function btStart(){
   if (!cp) return null;
   const my = ++ctlEpoch; cmdSpeed = null; cmdIncl = null;
-  await sendCP([0x00], 'запрос управления'); if (my !== ctlEpoch || !cp) return null;
-  await sendCP([0x07], 'старт');
+  const control = await sendCP([0x00], 'запрос управления', false); if (control.code !== 1 || my !== ctlEpoch || !cp) return null;
+  const started = await sendCP([0x07], 'старт'); if (started.code !== 1) return null;
   return my === ctlEpoch && cp ? my : null;
 }
 function btPause(){ if (cp) { ctlEpoch++; return sendCP([0x08, 0x02], 'пауза'); } }
@@ -676,19 +647,39 @@ function applyStage(start){
     }
   })();
 }
-function onCP(e){ const v = e.target.value; if (v.byteLength >= 3 && v.getUint8(0) === 0x80 && pending) pending(v.getUint8(1), v.getUint8(2), hex(v)); }
+function onCP(e){
+  const v = e.target.value;
+  if (v.byteLength < 3 || v.getUint8(0) !== 0x80) return;
+  const op = v.getUint8(1), code = v.getUint8(2);
+  if (pending && pending.op === op) pending.finish(code, hex(v));
+  else blog('неожиданный ответ Control Point [' + hex(v) + ']');
+}
+function onMachineStatus(e){
+  const v = e.target.value; if (!v.byteLength) return;
+  const op = v.getUint8(0);
+  if (op === 0xFF) blog('дорожка отозвала управление');
+  else if (op === 0x03) { blog('остановка страховочным ключом'); setStatus('остановлена ключом безопасности', true); }
+}
+function parseTreadmillData(d){
+  if (d.byteLength < 2) throw new Error('короткий пакет');
+  const flags = d.getUint16(0, true); let o = 2, speed = null, incline = null, distance = null;
+  const need = n => { if (o + n > d.byteLength) throw new Error('короткий пакет'); };
+  if (!(flags & 1)) { need(2); speed = d.getUint16(o, true) / 100; o += 2; }
+  if (flags & 2) { need(2); o += 2; }
+  if (flags & 4) { need(3); distance = d.getUint8(o) | (d.getUint8(o + 1) << 8) | (d.getUint8(o + 2) << 16); o += 3; }
+  if (flags & 8) { need(4); incline = d.getInt16(o, true) / 10; o += 4; }
+  return { flags, speed, incline, distance };
+}
 function onData(e){
   try {
-    const d = e.target.value, f = d.getUint16(0, true); let o = 2, sp = null, inc = null, dist = null;
+    const d = e.target.value, parsed = parseTreadmillData(d), f = parsed.flags, sp = parsed.speed, inc = parsed.incline, dist = parsed.distance;
     if (f !== lastFlags) { lastFlags = f; blog('данные: флаги 0x' + f.toString(16) + ' [' + hex(d) + ']'); }
-    if (!(f & 1)) { sp = d.getUint16(o, true) / 100; o += 2; }
-    if (f & 2) o += 2;
-    if (f & 4) { dist = d.getUint8(o) | (d.getUint8(o + 1) << 8) | (d.getUint8(o + 2) << 16); o += 3; }
-    if (f & 8) { inc = d.getInt16(o, true) / 10; o += 4; }
-    if (sp !== null) liveSpeed = sp;
-    if (inc !== null) liveIncl = inc;
-    $('btLive').textContent = 'лента: ' + (sp !== null ? sp.toFixed(1) + ' км/ч' : '—') + ' · наклон ' + (inc !== null ? inc + '%' : '—') + (dist !== null ? ' · ' + dist + ' м' : '');
-  } catch (err) {}
+    const now = Date.now();
+    if (sp !== null) { liveSpeed = sp; lastSpeedAt = now; }
+    if (inc !== null) { liveIncl = inc; lastInclAt = now; }
+    renderMachineValues();
+    $('btLive').textContent = 'лента: ' + (liveSpeed !== null && now - lastSpeedAt < 5000 ? liveSpeed.toFixed(1) + ' км/ч' : '—') + ' · наклон ' + (liveIncl !== null && now - lastInclAt < 5000 ? fm(liveIncl) + '%' : '—') + (dist !== null ? ' · ' + dist + ' м' : '');
+  } catch (err) { blog('ошибка данных: ' + err.message + ' [' + hex(e.target.value) + ']'); }
 }
 function btUi(connected, title, sub){
   $('btManual').hidden = !connected; $('stopBtn').hidden = !connected;
@@ -699,23 +690,68 @@ function btUi(connected, title, sub){
 async function connectBT(){
   if (!navigator.bluetooth) { setStatus('Web Bluetooth недоступен (нужен Chrome на Android)', true); btUi(false, 'Нет Bluetooth в браузере', 'Открой приложение в Chrome на Android.'); return; }
   try {
+    const savedId = load('tt_bt_device', ''), known = navigator.bluetooth.getDevices && savedId ? (await navigator.bluetooth.getDevices()).find(d => d.id === savedId) : null;
+    if (known) return connectBTDevice(known, false);
     setStatus('поиск…'); $('radar').classList.add('scan'); $('btTitle').textContent = 'Поиск устройств…'; $('btSub').textContent = 'Выбери дорожку в окне Bluetooth.';
-    btDevice = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [0x1826, 0xfff0] });
-    btDevice.addEventListener('gattserverdisconnected', () => { cp = null; liveSpeed = 0; setStatus('связь потеряна — лента работает, управляй с пульта', true); btUi(false, 'Связь потеряна', 'Лента работает на последних настройках. Управляй с пульта.'); blog('отключено'); });
-    const srv = await btDevice.gatt.connect(), svc = await srv.getPrimaryService(0x1826);
+    const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [0x1826, 0xfff0] });
+    return connectBTDevice(device, false);
+  } catch (e) { if (e.name !== 'NotFoundError') { setStatus('не удалось: ' + e.message, true); btUi(false, 'Не удалось подключиться', e.message); blog('ошибка: ' + e.message); } else { setStatus('не подключена'); btUi(false, 'Дорожка не подключена', 'Выбор устройства отменён.'); } }
+}
+function resetBTState(reason){
+  ctlEpoch++; btGeneration++; cmdSpeed = null; cmdIncl = null;
+  if (pending) pending.finish(0, '', reason || 'связь потеряна');
+  queue = Promise.resolve(); cp = null; treadmillDataChar = null; statusChar = null;
+  liveSpeed = null; liveIncl = null; lastSpeedAt = 0; lastInclAt = 0; lastFlags = null;
+  $('btLive').textContent = ''; renderMachineValues();
+}
+function onBTDisconnected(){
+  const manual = btManualDisconnect; resetBTState(manual ? 'отключено' : 'связь потеряна'); blog(manual ? 'отключено пользователем' : 'соединение потеряно');
+  if (manual) { btManualDisconnect = false; setStatus('не подключена'); btUi(false, 'Дорожка не подключена', 'Нажми «Найти дорожку», чтобы подключиться снова.'); }
+  else { setStatus('переподключение…', true); btUi(false, 'Связь потеряна', 'Пробую подключиться снова. Лента может продолжать движение — управляй с пульта.'); scheduleBTReconnect(); }
+}
+function scheduleBTReconnect(){
+  clearTimeout(btReconnectTimer);
+  if (btManualDisconnect || !load('tt_bt_auto', false)) return;
+  if (btReconnectAttempt >= 5) { setStatus('связь потеряна — подключи вручную', true); return; }
+  const delay = Math.min(15000, 2000 * Math.pow(2, btReconnectAttempt++));
+  btReconnectTimer = setTimeout(() => autoConnectBT(true), delay);
+}
+async function autoConnectBT(reconnecting = false){
+  if (!navigator.bluetooth || !navigator.bluetooth.getDevices || !load('tt_bt_auto', false) || btConnecting || cp) return;
+  try {
+    const id = load('tt_bt_device', ''), devices = await navigator.bluetooth.getDevices(), device = devices.find(d => d.id === id);
+    if (device) await connectBTDevice(device, reconnecting); else if (reconnecting) scheduleBTReconnect();
+  } catch (e) { if (reconnecting) scheduleBTReconnect(); }
+}
+async function connectBTDevice(device, reconnecting){
+  if (!device || btConnecting) return;
+  btConnecting = true; btManualDisconnect = false; clearTimeout(btReconnectTimer); btDevice = device;
+  setStatus(reconnecting ? 'переподключение…' : 'подключение…'); $('radar').classList.add('scan');
+  try {
+    device.ongattserverdisconnected = onBTDisconnected;
+    const srv = device.gatt.connected ? device.gatt : await device.gatt.connect(), svc = await srv.getPrimaryService(0x1826);
     const ctl = await svc.getCharacteristic(0x2AD9);
     await ctl.startNotifications(); ctl.addEventListener('characteristicvaluechanged', onCP);
     const td = await svc.getCharacteristic(0x2ACD);
     await td.startNotifications(); td.addEventListener('characteristicvaluechanged', onData);
-    try { const r = await (await svc.getCharacteristic(0x2AD4)).readValue(); devMinSpeed = Math.max(r.getUint16(0, true) / 100, 0.5); const mx = r.getUint16(2, true) / 100; if (mx >= 1) devMaxSpeed = mx; blog('скорость ' + devMinSpeed + '–' + devMaxSpeed + ' км/ч'); } catch (e) {}
-    try { const r = await (await svc.getCharacteristic(0x2AD5)).readValue(); devMinIncl = r.getInt16(0, true) / 10; const mx = r.getInt16(2, true) / 10; if (mx > 0) devMaxIncl = mx; blog('наклон ' + devMinIncl + '–' + devMaxIncl + '%'); } catch (e) {}
-    cp = ctl;
-    setStatus(btDevice.name || 'дорожка');
-    btUi(true, 'Дорожка подключена', btDevice.name || 'дорожка');
-    sendCP([0x00], 'запрос управления');
-  } catch (e) { setStatus('не удалось: ' + e.message, true); btUi(false, 'Не удалось подключиться', e.message); blog('ошибка: ' + e.message); }
+    try { const sc = await svc.getCharacteristic(0x2ADA); await sc.startNotifications(); sc.addEventListener('characteristicvaluechanged', onMachineStatus); statusChar = sc; } catch (e) { statusChar = null; }
+    try { const r = await (await svc.getCharacteristic(0x2AD4)).readValue(); if (r.byteLength >= 4) { devMinSpeed = Math.max(r.getUint16(0, true) / 100, 0.5); const mx = r.getUint16(2, true) / 100; if (mx >= 1) devMaxSpeed = mx; blog('скорость ' + devMinSpeed + '–' + devMaxSpeed + ' км/ч'); } } catch (e) {}
+    try { const r = await (await svc.getCharacteristic(0x2AD5)).readValue(); if (r.byteLength >= 4) { devMinIncl = r.getInt16(0, true) / 10; const mx = r.getInt16(2, true) / 10; if (mx > 0) devMaxIncl = mx; blog('наклон ' + devMinIncl + '–' + devMaxIncl + '%'); } } catch (e) {}
+    cp = ctl; treadmillDataChar = td; renderMachineValues(); save('tt_bt_device', device.id); save('tt_bt_auto', true); btReconnectAttempt = 0;
+    const control = await sendCP([0x00], reconnecting ? 'запрос управления после переподключения' : 'запрос управления', false);
+    setStatus(control.code === 1 ? (device.name || 'дорожка') : 'подключена, но нет управления', control.code !== 1);
+    btUi(true, reconnecting ? 'Дорожка переподключена' : 'Дорожка подключена', device.name || 'дорожка');
+    if (reconnecting && running && cp) { await wait(750); if (running && cp) { blog('восстанавливаю параметры текущего этапа'); applyStage(false); } }
+  } catch (e) {
+    resetBTState('ошибка подключения'); setStatus('не удалось: ' + e.message, true); btUi(false, 'Не удалось подключиться', e.message); blog('ошибка: ' + e.message);
+    try { device.ongattserverdisconnected = null; if (device.gatt.connected) device.gatt.disconnect(); } catch (err) {}
+    if (reconnecting) scheduleBTReconnect();
+  } finally { btConnecting = false; $('radar').classList.remove('scan'); }
 }
-$('btConnect').onclick = () => { if (cp && btDevice) { btDevice.gatt.disconnect(); } else connectBT(); };
+$('btConnect').onclick = () => {
+  if (btDevice && btDevice.gatt && btDevice.gatt.connected) { btManualDisconnect = true; save('tt_bt_auto', false); btDevice.gatt.disconnect(); }
+  else connectBT();
+};
 $('btHelp').onclick = () => { $('btTips').hidden = !$('btTips').hidden; };
 $('btManual').addEventListener('click', e => {
   const a = e.target.closest('[data-act]'); if (!a) return; const act = a.dataset.act;
@@ -730,8 +766,8 @@ $('btManual').addEventListener('click', e => {
 window.addEventListener('pagehide', () => saveSession(false));
 selectWorkout(0);
 go('run');
-setTimeout(autoConnectHeart, 300);
-setInterval(() => { if (document.visibilityState === 'visible' && load('tt_hr_auto', false) && (!heartDevice || !heartDevice.gatt.connected)) autoConnectHeart(); }, 15000);
+setTimeout(() => autoConnectBT(true), 400);
+setInterval(() => { if (cp) renderMachineValues(); }, 1000);
 </script>
 <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');</script>
 </body>
