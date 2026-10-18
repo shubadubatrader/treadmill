@@ -27,13 +27,27 @@ function sourceOf(name) {
 eval(sourceOf('parseTreadmillData'));
 
 const packet = new DataView(Uint8Array.from([
-  0x0c, 0x00,       // distance + incline; instantaneous speed is present
+  0x0c, 0x04,       // distance + incline + elapsed time; instantaneous speed is present
   0x8a, 0x02,       // 6.50 km/h
   0xd2, 0x04, 0x00, // 1234 m
   0x32, 0x00,       // 5.0%
   0x00, 0x00,       // ramp angle
+  0x58, 0x02,       // 600 seconds elapsed
 ]).buffer);
-assert.deepEqual(parseTreadmillData(packet), { flags: 0x0c, speed: 6.5, incline: 5, distance: 1234 });
+assert.deepEqual(parseTreadmillData(packet), { flags: 0x40c, speed: 6.5, incline: 5, distance: 1234, elapsed: 600 });
+const fullPacket = new DataView(Uint8Array.from([
+  0xfc, 0x07,       // every optional field through elapsed time
+  0x8a, 0x02,       // instantaneous speed
+  0xd2, 0x04, 0x00, // total distance
+  0x32, 0x00, 0x00, 0x00, // incline and ramp angle
+  0x01, 0x00, 0x02, 0x00, // positive and negative elevation gain
+  0x09, 0x0a,       // instantaneous and average pace
+  0x64, 0x00, 0xc8, 0x00, 0x03, // expended energy
+  0x78,             // heart rate
+  0x32,             // metabolic equivalent
+  0x58, 0x02,       // elapsed time
+]).buffer);
+assert.deepEqual(parseTreadmillData(fullPacket), { flags: 0x7fc, speed: 6.5, incline: 5, distance: 1234, elapsed: 600 });
 assert.throws(() => parseTreadmillData(new DataView(Uint8Array.from([0x08, 0x00, 0x10]).buffer)), /короткий пакет/);
 
 const num = (x, lo, hi, d) => { x = parseFloat(String(x).replace(',', '.')); return isFinite(x) ? Math.min(Math.max(x, lo), hi) : d; };
